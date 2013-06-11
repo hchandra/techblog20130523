@@ -1,0 +1,7 @@
+site :opscode
+cookbook 'selinux'
+cookbook 'sysctl'
+cookbook 'openssh'
+cookbook 'ntp'
+cookbook 'yum'
+cookbook 'simple_iptables'

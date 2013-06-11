@@ -1,0 +1,6 @@
+Vagrant::Config.run do |c|
+  c.vm.box = "centos63mini"
+  c.vm.host_name = "dev1"
+  c.vm.network :hostonly, "192.168.0.3"
+  c.vm.forward_port 80, 8080 # 8080を80にforward
+end

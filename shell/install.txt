@@ -1,0 +1,130 @@
+exit;
+# edit file rule
+# - is delete line
+# + is add line
+
+# 1. yum epel repository enable
+wget http://dl.fedoraproject.org/pub/epel/6/x86_64/epel-release-6-8.noarch.rpm
+sudo rpm -ivh epel-release-6-8.noarch.rpm
+
+
+# 2.ntpd install & configure
+sudo yum install -y ntp
+
+sudo vi /etc/ntp.conf
+- server 0.centos.pool.ntp.org
+- server 1.centos.pool.ntp.org
+- server 2.centos.pool.ntp.org
++ server ntp.nict.jp
++ server ntp1.jst.mfeed.ad.jp
++ server ntp2.jst.mfeed.ad.jp
+
+sudo chkconfig ntpd on
+sudo services ntpd start
+
+
+# 3. iptable 80 port enable(止めとく）
+sudo service iptables stop
+
+# 4. sshd configure
+sudo vi /etc/ssh/sshd_config 
++ PasswordAuthentication yes
++ PermitEmptyPasswords no
++ PermitRootLogin no
+
+sudo service sshd reload
+
+
+# 5. php yum package install
+sudo yum install -y php php-cli php-common php-xml php-pdo php-devel php-gd php-mbstring php-mysql php-pdo php-pear php-intl php-pecl-apc php-process pcre-devel
+
+sudo vi /etc/php.ini
++ date.timezone = Asia/Tokyo
+
+
+# 6. user & group add
+sudo groupadd -g 1000 develop
+sudo useradd -u 1000 -g 1000 developer
+
+
+# 7. symfony package install
+sudo mkdir /home/nginx
+sudo chmod 777 /home/nginx
+cd /home/nginx
+curl -sS https://getcomposer.org/installer | php
+php composer.phar create-project symfony/framework-standard-edition /home/nginx/symfony 2.2.1
+
+sudo chown -R developer:develop /home/nginx/symfony
+sudo chmod -R 775 /home/nginx/symfony
+
+sudo vi /home/nginx/symfony/web/app_dev.php
+- if (isset($_SERVER['HTTP_CLIENT_IP'])
+-     || isset($_SERVER['HTTP_X_FORWARDED_FOR'])
+-     || !in_array(@$_SERVER['REMOTE_ADDR'], array('127.0.0.1', 'fe80::1', '::1'))
+- ) {
+-     header('HTTP/1.0 403 Forbidden');
+-     exit('You are not allowed to access this file. Check '.basename(__FILE__).' for more information.');
+- }
++ umask(0000);
+
+
+# 8. nginx install
+
+sudo yum install -y php-fpm nginx
+
+sudo vi /etc/php-fpm.d/www.conf
+- user = apache
+- group = apache
++ user = nginx
++ group = develop
+
+sudo vi /etc/nginx/nginx.conf
+- user nginx;
++ user nginx develop;
+
+sudo vi /etc/nginx/conf.d/default.conf 
++ server {
++     listen      80;
++     server_name localhost;
++     root        /home/nginx/symfony/web;
++     index       app_dev.php;
++     charset     utf-8;
++     access_log  /var/log/nginx/host.access.log;
++     error_log   /var/log/nginx/host.error.log;
++ 
++     #error_page  404              /404.html;
++     location / {
++         if (!-e $request_filename) {
++             rewrite ^/(.*)$ /app_dev.php?q=$1 last;
++         }
++     }
++ 
++     # redirect server error pages to the static page /50x.html
++     #
++     error_page   500 502 503 504  /50x.html;
++     location = /50x.html {
++         root   /usr/share/nginx/html;
++     }
++ 
++     # pass the PHP scripts to FastCGI server listening on 127.0.0.1:9000
++     location ~ \.php$ {
++         # fastcgi_pass    unix:/var/run/php5-fpm.sock;
++         fastcgi_pass    127.0.0.1:9000;
++         fastcgi_index   app_dev.php;
++         include         fastcgi_params;
++         fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
++     }
++ 
++     # deny access to .htaccess files, if Apache's document root
++     # concurs with nginx's one
++     #
++     location ~ /\.ht {
++         deny  all;
++     }
++ }
+
+
+sudo chkconfig php-fpm on
+sudo chkconfig nginx on
+sudo service php-fpm start
+sudo service nginx start
